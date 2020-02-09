@@ -2048,9 +2048,10 @@ static Type validateParameterType(ParamDecl *decl) {
   Type Ty = TL.getType();
   if (decl->isVariadic()) {
     Ty = TypeChecker::getArraySliceType(decl->getStartLoc(), Ty);
-    if (Ty.isNull()) {
+    assert(Ty && "TypeChecker::getArraySliceType returned nullptr.");
+    if (Ty->hasError()) {
       decl->setInvalid();
-      return ErrorType::get(ctx);
+      return Ty;
     }
 
     // Disallow variadic parameters in enum elements.

@@ -195,12 +195,13 @@ FunctionBuilderTypeRequest::evaluate(Evaluator &evaluator,
   auto &ctx = dc->getASTContext();
   Type type = resolveCustomAttrType(mutableAttr, dc,
                                     CustomAttrTypeKind::NonGeneric);
-  if (!type) return Type();
+  assert(type && "resolveCustomAttrType returned nullptr.");
+  if (type->hasError()) return type;
 
   auto nominal = type->getAnyNominal();
   if (!nominal) {
     assert(ctx.Diags.hadAnyError());
-    return Type();
+    return ErrorType::get(ctx);
   }
 
   // Do some additional checking on parameters.
@@ -216,7 +217,7 @@ FunctionBuilderTypeRequest::evaluate(Evaluator &evaluator,
                          diag::function_builder_parameter_not_of_function_type,
                          nominal->getFullName());
       mutableAttr->setInvalid();
-      return Type();
+      return ErrorType::get(ctx);
     }
 
     // Forbid the parameter to be an autoclosure.
@@ -225,7 +226,7 @@ FunctionBuilderTypeRequest::evaluate(Evaluator &evaluator,
                          diag::function_builder_parameter_autoclosure,
                          nominal->getFullName());
       mutableAttr->setInvalid();
-      return Type();
+      return ErrorType::get(ctx);
     }
   }
 

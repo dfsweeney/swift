@@ -2552,9 +2552,10 @@ static bool canBridgeThroughCast(ConstraintSystem &cs, Type fromType,
 
   auto bridged = TypeChecker::getDynamicBridgedThroughObjCClass(cs.DC,
                                                                 fromType, toType);
-  if (!bridged)
-    return false;
-
+  
+  // getDynamicBridgedThroughObjCClass can return nullptr
+  if (!bridged || bridged->hasError()) return false;
+  
   // Note: don't perform this recovery for NSNumber;
   if (auto classType = bridged->getAs<ClassType>()) {
     SmallString<16> scratch;

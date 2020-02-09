@@ -4112,8 +4112,12 @@ CheckedCastKind TypeChecker::typeCheckCheckedCast(Type fromType,
   }
 
   // If we can bridge through an Objective-C class, do so.
-  if (Type bridgedToClass = getDynamicBridgedThroughObjCClass(dc, fromType,
-                                                              toType)) {
+  Type bridgedToClass = getDynamicBridgedThroughObjCClass(dc, fromType,
+                                                        toType);
+  //getDynamicBridgedThroughObjCClass can return nullptr
+  if (!bridgedToClass) return failed();
+  
+  if (!bridgedToClass->hasError()) {
     switch (typeCheckCheckedCast(bridgedToClass, fromType,
                                  CheckedCastContextKind::None, dc, SourceLoc(),
                                  nullptr, SourceRange())) {
@@ -4129,10 +4133,13 @@ CheckedCastKind TypeChecker::typeCheckCheckedCast(Type fromType,
       break;
     }
   }
-
+  Type bridgedFromClass = getDynamicBridgedThroughObjCClass(dc, toType,
+                                                            fromType);
+  //getDynamicBridgedThroughObjCClass can return nullptr
+  if (!bridgedFromClass) return failed();
+  
   // If we can bridge through an Objective-C class, do so.
-  if (Type bridgedFromClass = getDynamicBridgedThroughObjCClass(dc, toType,
-                                                                fromType)) {
+  if (!bridgedFromClass->hasError()) {
     switch (typeCheckCheckedCast(toType, bridgedFromClass,
                                  CheckedCastContextKind::None, dc, SourceLoc(),
                                  nullptr, SourceRange())) {

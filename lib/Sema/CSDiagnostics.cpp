@@ -2638,8 +2638,10 @@ bool ContextualFailure::trySequenceSubsequenceFixIts(
 
   auto String = TypeChecker::getStringType(getASTContext());
   auto Substring = TypeChecker::getSubstringType(getASTContext());
-
-  if (!String || !Substring)
+  assert(String && "TypeChecker::getStringType returned nullptr.");
+  assert(Substring && "TypeChecker::getSubstringType returned nullptr.");
+  
+  if (String->hasError() || Substring->hasError())
     return false;
 
   // Substring -> String conversion

@@ -2577,7 +2577,8 @@ namespace {
       // Try to build the appropriate type for a variadic argument list of
       // the fresh element type.  If that failed, just bail out.
       auto array = TypeChecker::getArraySliceType(expr->getLoc(), element);
-      if (!array) return element;
+      assert(array && "TypeChecker::getArraySliceType returned nullptr.");
+      if (array->hasError()) return element;
 
       // Require the operand to be convertible to the array type.
       CS.addConstraint(ConstraintKind::Conversion,
@@ -2944,9 +2945,9 @@ namespace {
     /// worth QoI efforts.
     Type getOptionalType(SourceLoc optLoc, Type valueTy) {
       auto optTy = TypeChecker::getOptionalType(optLoc, valueTy);
-      if (!optTy ||
-          TypeChecker::requireOptionalIntrinsics(CS.getASTContext(), optLoc))
-        return Type();
+      assert(optTy && "TypeChecker::getOptionalType returned nullptr.");
+      if (TypeChecker::requireOptionalIntrinsics(CS.getASTContext(), optLoc))
+        return ErrorType::get(CS.getASTContext());
 
       return optTy;
     }
