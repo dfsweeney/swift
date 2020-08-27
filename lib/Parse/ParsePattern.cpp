@@ -823,9 +823,9 @@ Parser::parseFunctionSignature(Identifier SimpleName,
   return Status;
 }
 
-void Parser::parseAsyncThrows(
-    SourceLoc existingArrowLoc, SourceLoc &asyncLoc, SourceLoc &throwsLoc, TypeRepr *&throwsType,
-    bool *rethrows) {
+void Parser::parseAsyncThrows(SourceLoc existingArrowLoc, SourceLoc &asyncLoc,
+                              SourceLoc &throwsLoc, TypeRepr *&throwsType,
+                              bool *rethrows) {
   if (shouldParseExperimentalConcurrency() &&
       Tok.isContextualKeyword("async")) {
     asyncLoc = consumeToken();
@@ -851,16 +851,15 @@ void Parser::parseAsyncThrows(
 
     StringRef keyword = Tok.getText();
     throwsLoc = consumeToken();
-    
+
     if (!peekToken().isKeyword()) {
-      BacktrackingScope backtrackingScope(*this);
-      if (peekToken().is(tok::kw_throws)) {
-        ASTContext &Ctx = SF.getASTContext();
-        DiagnosticSuppression SuppressedDiags(Ctx.Diags);
-        backtrackingScope.cancelBacktrack();
-        if (canParseType()) {
-          ParserResult<TypeRepr> result = parseType();
-          throwsType = result.getPtrOrNull();
+      if (canParseSimpleTypeIdentifier()) {
+        BacktrackingScope backtrack(*this);
+        DiagnosticSuppression SuppressedDiags(Diags);
+        ParserResult<TypeRepr> result = parseType();
+        throwsType = result.getPtrOrNull();
+        if (throwsType) {
+          backtrack.cancelBacktrack();
         }
       }
     }
