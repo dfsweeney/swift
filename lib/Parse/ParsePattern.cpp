@@ -823,9 +823,9 @@ Parser::parseFunctionSignature(Identifier SimpleName,
   return Status;
 }
 
-void Parser::parseAsyncThrows(
-    SourceLoc existingArrowLoc, SourceLoc &asyncLoc, SourceLoc &throwsLoc, TypeRepr *&throwsType,
-    bool *rethrows) {
+void Parser::parseAsyncThrows(SourceLoc existingArrowLoc, SourceLoc &asyncLoc,
+                              SourceLoc &throwsLoc, TypeRepr *&throwsType,
+                              bool *rethrows) {
   if (shouldParseExperimentalConcurrency() &&
       Tok.isContextualKeyword("async")) {
     asyncLoc = consumeToken();
@@ -849,43 +849,17 @@ void Parser::parseAsyncThrows(
         .fixItReplace(Tok.getLoc(), "throws");
     }
     StringRef keyword;
-    if (Tok.isKeyword() && Tok.is(tok::kw_throws)) {
-      keyword = Tok.getText();
-      throwsLoc = consumeToken();
-      { // scope for backtracking
-        BacktrackingScope backtrack(*this);
-
-        // look for the left paren for throws (_type_)
-        SourceLoc lParen;
-        if (!parseToken(tok::l_paren, lParen,
-                        diag::expected_parenthesized_type_after_throws)) {
-          // parseToken returns false if it parsed the token.
-          ParserResult<TypeRepr> throwsTypeRepr = parseTypeIdentifier();
-          if (!throwsTypeRepr.isParseError()) {
-            SourceLoc rParen;
-            if (!parseMatchingToken(tok::r_paren, rParen,
-                                    diag::expected_parenthesized_type_after_throws,
-                                    lParen)) {
-              //returns false if found right paren
-              // success
-              throwsType = throwsTypeRepr.getPtrOrNull();
-              backtrack.cancelBacktrack();
-            } else {
-              // both parens but empty throwsType [()]
-              diagnose(Tok, diag::expected_parenthesized_type_after_throws);
-            }
-          } else {
-            // no matching right paren
-            diagnose(Tok, diag::expected_parenthesized_type_after_throws);
-          }
-        } else {
-          // bad parse of type representation
-          diagnose(Tok, diag::expected_parenthesized_type_after_throws);
-        }
-      }
-    } // end of backtracking scope
-  //} // end of tok::kw_throws
-
+    
+    keyword = Tok.getText();
+    throwsLoc = consumeToken();
+    
+    ParserResult<TypeRepr> throwsTypeResult = parseThrowsType();
+    
+    if (!throwsTypeResult.isParseError()) {
+      throwsType = throwsTypeResult.getPtrOrNull();
+      // TODO need to set throws type location from result
+    }
+    
     if (existingArrowLoc.isValid()) {
       diagnose(throwsLoc, diag::async_or_throws_in_wrong_position,
                rethrows ? (*rethrows ? 1 : 0) : 0)
@@ -903,6 +877,56 @@ void Parser::parseAsyncThrows(
           existingArrowLoc.isValid() ? existingArrowLoc : throwsLoc, "async ");
     }
   }
+}
+
+/// Parse a type in parentheses after a `throws` or `rethrows`
+///
+ParserResult<TypeRepr> Parser::parseThrowsType() {
+  // look for the left paren for throws (_type_)
+  BacktrackingScope backtrack(*this);
+  
+  ParserResult<TypeRepr> throwsTypeRepr;
+  
+  if (Tok.is(tok::l_paren)) {
+    consumeToken();
+    throwsTypeRepr = parseTypeIdentifier();
+    if (!throwsTypeRepr.isParseError()) {
+      if (Tok.is(tok::r_paren)) {
+        consumeToken();
+        backtrack.cancelBacktrack();
+        return throwsTypeRepr;
+      }
+    }
+  }
+  return nullptr;
+  
+//
+//    ParserResult<TypeRepr> throwsTypeRepr = parseTypeIdentifier();
+//    if (!throwsTypeRepr.isParseError()) {
+//      SourceLoc rParen;
+//      if (!parseMatchingToken(tok::r_paren, rParen,
+//                              diag::expected_parenthesized_type_after_throws,
+//                              lParen)) {
+//        //returns false if found right paren
+//        // success
+//        throwsType = throwsTypeRepr.getPtrOrNull();
+//      } else {
+//        // both parens but empty throwsType [()]
+//        diagnose(Tok, diag::expected_parenthesized_type_after_throws);
+//      }
+//    } else {
+//      // no matching right paren
+//      diagnose(Tok, diag::expected_parenthesized_type_after_throws);
+//    }
+//  } else {
+//    // no parens at all, just continue
+//    // bad parse of type representation
+//    //diagnose(Tok, diag::expected_parenthesized_type_after_throws);
+//  }
+
+  
+//} // end of tok::kw_throws
+
 }
 
 /// Parse a pattern with an optional type annotation.

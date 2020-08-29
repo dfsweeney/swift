@@ -1,5 +1,18 @@
 // RUN: %target-typecheck-verify-swift
 
+struct SomeError: Error {}
+
+func a() throws (SomeError) -> Int {
+  return 1
+}
+
+protocol P {
+  func b() throws (SomeError) -> Int
+  func d(x: Int) throws
+  mutating func c() throws (SomeError) -> Int
+  var x : Int {get}
+}
+
 enum MSV : Error {
   case Foo, Bar, Baz
   case CarriesInt(Int)
@@ -44,9 +57,9 @@ func one() {
 
   struct SomeError: Swift.Error {}
 
-  func bar() throws SomeError {}
+  func bar() throws (SomeError) {}
 
-  func baz() throws SomeError -> Int { return 2; }
+  func baz() throws (SomeError) -> Int { return 2; }
   
   do {
 #if false

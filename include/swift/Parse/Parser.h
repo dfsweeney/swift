@@ -1377,6 +1377,8 @@ public:
   void parseAsyncThrows(
       SourceLoc existingArrowLoc, SourceLoc &asyncLoc, SourceLoc &throwsLoc, TypeRepr *&throwsType,
       bool *rethrows);
+  
+  ParserResult<TypeRepr> parseThrowsType();
 
   //===--------------------------------------------------------------------===//
   // Pattern Parsing
