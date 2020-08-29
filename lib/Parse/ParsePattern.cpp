@@ -852,22 +852,39 @@ void Parser::parseAsyncThrows(
     if (Tok.isKeyword() && Tok.is(tok::kw_throws)) {
       keyword = Tok.getText();
       throwsLoc = consumeToken();
-      ASTContext &Ctx = SF.getASTContext();
-      DiagnosticSuppression SuppressedDiags(Ctx.Diags);
-//      bool hasType = false;
-//      {
-//        BacktrackingScope backtrack(*this);
-//        hasType = canParseType();
-//      }
-//      if (hasType) {
-//      parseTypeIdentifier()
-        ParserResult<TypeRepr> result = parseType();
-        throwsType = result.getPtrOrNull();
-//      }
-    } else {
-      keyword = Tok.getText();
-      throwsLoc = consumeToken();
-    }
+      { // scope for backtracking
+        BacktrackingScope backtrack(*this);
+
+        // look for the left paren for throws (_type_)
+        SourceLoc lParen;
+        if (!parseToken(tok::l_paren, lParen,
+                        diag::expected_parenthesized_type_after_throws)) {
+          // parseToken returns false if it parsed the token.
+          ParserResult<TypeRepr> throwsTypeRepr = parseTypeIdentifier();
+          if (!throwsTypeRepr.isParseError()) {
+            SourceLoc rParen;
+            if (!parseMatchingToken(tok::r_paren, rParen,
+                                    diag::expected_parenthesized_type_after_throws,
+                                    lParen)) {
+              //returns false if found right paren
+              // success
+              throwsType = throwsTypeRepr.getPtrOrNull();
+              backtrack.cancelBacktrack();
+            } else {
+              // both parens but empty throwsType [()]
+              diagnose(Tok, diag::expected_parenthesized_type_after_throws);
+            }
+          } else {
+            // no matching right paren
+            diagnose(Tok, diag::expected_parenthesized_type_after_throws);
+          }
+        } else {
+          // bad parse of type representation
+          diagnose(Tok, diag::expected_parenthesized_type_after_throws);
+        }
+      }
+    } // end of backtracking scope
+  //} // end of tok::kw_throws
 
     if (existingArrowLoc.isValid()) {
       diagnose(throwsLoc, diag::async_or_throws_in_wrong_position,
