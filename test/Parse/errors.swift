@@ -33,6 +33,9 @@ func missingClosingParenAmbiguous2() throws ((Int) -> () -> Int {}
 // expected-error {{expected ')' at end of thrown type}}
 // expected-note {{to match this opening '('}}
 
+func typedRethrows(_ fn: () throws (SomeError) -> ()) rethrows (SomeError) {}
+
+
 var functionTypeWithThrownType: (Int) throws (SomeError) -> Int
 
 var typeWithThrownType: (Int) throws (SomeError)

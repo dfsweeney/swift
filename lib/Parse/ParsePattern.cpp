@@ -856,7 +856,6 @@ void Parser::parseAsyncThrows(SourceLoc existingArrowLoc, SourceLoc &asyncLoc,
     ParserResult<TypeRepr> throwsTypeResult = parseThrowsType();
     
     throwsType = throwsTypeResult.getPtrOrNull();
-    // TODO need to set throws type location from result
     
     if (existingArrowLoc.isValid()) {
       diagnose(throwsLoc, diag::async_or_throws_in_wrong_position,
@@ -878,10 +877,15 @@ void Parser::parseAsyncThrows(SourceLoc existingArrowLoc, SourceLoc &asyncLoc,
 }
 
 /// Parse a type in parentheses after a `throws` or `rethrows`
-///
+///   throws-type:
+///     '(' type ')'
+/// Parses a parenthesized type. If the closing parenthesis is missing, it
+/// backtracks and parses a type, that is not a function type, to preserve
+/// the return type of the throwing function
 ParserResult<TypeRepr> Parser::parseThrowsType() {
   // look for the left paren for throws (_type_)
   
+  // backtracking, in case the closing parenthesis is missing
   Optional<BacktrackingScope> backtracking;
   
   if (Tok.is(tok::l_paren)) {
@@ -889,8 +893,11 @@ ParserResult<TypeRepr> Parser::parseThrowsType() {
     
     backtracking.emplace(*this);
     
+    // we parse every type (including function types)
     ParserResult<TypeRepr> throwsTypeRepr = parseType(diag::expected_parenthesized_type_after_throws);
     
+    // if the closing parenthesis is missing, we backtrack and parse the type
+    // again, this time excluding function types
     if (auto typeRepr = throwsTypeRepr.getPtrOrNull()) {
       if (isa<FunctionTypeRepr>(typeRepr) && !Tok.is(tok::r_paren)) {
         backtracking.reset();
@@ -899,6 +906,7 @@ ParserResult<TypeRepr> Parser::parseThrowsType() {
       }
     }
     
+    // otherwise we cancel the backtrack
     if (backtracking) backtracking->cancelBacktrack();
     
     // Parse the closing ')'.

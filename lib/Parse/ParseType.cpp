@@ -349,6 +349,10 @@ ParserResult<TypeRepr> Parser::parseSILBoxType(GenericParamList *generics,
 }
 
 
+/// parseTypeNotAllowingFunctionType
+///   type:
+///     attribute-list type-composition
+///
 ParserResult<TypeRepr>
 Parser::parseTypeNotAllowingFunctionType(Diag<> MessageID,
                                          bool HandleCodeCompletion,
@@ -415,7 +419,7 @@ Parser::parseTypeNotAllowingFunctionType(Diag<> MessageID,
 ///     attribute-list type-function
 ///
 ///   type-function:
-///     type-composition 'async'? 'throws'? type? '->' type
+///     type-composition 'async'? 'throws'? throws-type? '->' type
 ///
 ParserResult<TypeRepr> Parser::parseType(Diag<> MessageID,
                                          bool HandleCodeCompletion,
@@ -497,6 +501,8 @@ ParserResult<TypeRepr> Parser::parseType(Diag<> MessageID,
         .fixItReplace(Tok.getLoc(), "throws");
     }
     
+    // backtracking, in case the type is lacking a '->' and therefore is no
+    // function type
     BacktrackingScope backtrack(*this);
     
     throwsLoc = consumeToken();
@@ -504,7 +510,6 @@ ParserResult<TypeRepr> Parser::parseType(Diag<> MessageID,
     ParserResult<TypeRepr> throwsTypeResult = parseThrowsType();
     
     throwsType = throwsTypeResult.getPtrOrNull();
-    // TODO need to set throws type location from result
 
     // 'async' must preceed 'throws'; accept this but complain.
     if (shouldParseExperimentalConcurrency() &&
@@ -516,6 +521,7 @@ ParserResult<TypeRepr> Parser::parseType(Diag<> MessageID,
         .fixItInsert(throwsLoc, "async ");
     }
     
+    // type is indeed a function type, so we cancel the backtrack
     if (Tok.is(tok::arrow)) backtrack.cancelBacktrack();
   }
 
