@@ -349,6 +349,66 @@ ParserResult<TypeRepr> Parser::parseSILBoxType(GenericParamList *generics,
 }
 
 
+ParserResult<TypeRepr>
+Parser::parseTypeNotAllowingFunctionType(Diag<> MessageID,
+                                         bool HandleCodeCompletion,
+                                         bool IsSILFuncDecl) {
+  // Start a context for creating type syntax.
+  SyntaxParsingContext TypeParsingContext(SyntaxContext,
+                                          SyntaxContextKind::Type);
+  // Parse attributes.
+  ParamDecl::Specifier specifier;
+  SourceLoc specifierLoc;
+  TypeAttributes attrs;
+  parseTypeAttributeList(specifier, specifierLoc, attrs);
+
+  Optional<Scope> GenericsScope;
+  Optional<Scope> patternGenericsScope;
+
+  // Parse generic parameters in SIL mode.
+  GenericParamList *generics = nullptr;
+  SourceLoc substitutedLoc;
+  GenericParamList *patternGenerics = nullptr;
+  if (isInSILMode()) {
+    // If this is part of a sil function decl, generic parameters are visible in
+    // the function body; otherwise, they are visible when parsing the type.
+    if (!IsSILFuncDecl)
+      GenericsScope.emplace(this, ScopeKind::Generics);
+    generics = maybeParseGenericParams().getPtrOrNull();
+    
+    if (Tok.is(tok::at_sign) && peekToken().getText() == "substituted") {
+      consumeToken(tok::at_sign);
+      substitutedLoc = consumeToken(tok::identifier);
+      patternGenericsScope.emplace(this, ScopeKind::Generics);
+      patternGenerics = maybeParseGenericParams().getPtrOrNull();
+      if (!patternGenerics) {
+        diagnose(Tok.getLoc(), diag::sil_function_subst_expected_generics);
+        patternGenericsScope.reset();
+      }
+    }
+  }
+  
+  // In SIL mode, parse box types { ... }.
+  if (isInSILMode() && Tok.is(tok::l_brace)) {
+    if (patternGenerics) {
+      diagnose(Tok.getLoc(), diag::sil_function_subst_expected_function);
+      patternGenericsScope.reset();
+    }
+    return parseSILBoxType(generics, attrs, GenericsScope);
+  }
+
+  ParserResult<TypeRepr> ty =
+    parseTypeSimpleOrComposition(MessageID, HandleCodeCompletion);
+  if (ty.isNull())
+    return ty;
+  auto tyR = ty.get();
+  auto status = ParserStatus(ty);
+  
+  return makeParserResult(status, applyAttributeToType(tyR, attrs, specifier,
+                                                       specifierLoc));
+}
+
+
 /// parseType
 ///   type:
 ///     attribute-list type-composition

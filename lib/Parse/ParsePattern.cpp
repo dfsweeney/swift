@@ -855,10 +855,8 @@ void Parser::parseAsyncThrows(SourceLoc existingArrowLoc, SourceLoc &asyncLoc,
     
     ParserResult<TypeRepr> throwsTypeResult = parseThrowsType();
     
-    if (!throwsTypeResult.isParseError()) {
-      throwsType = throwsTypeResult.getPtrOrNull();
-      // TODO need to set throws type location from result
-    }
+    throwsType = throwsTypeResult.getPtrOrNull();
+    // TODO need to set throws type location from result
     
     if (existingArrowLoc.isValid()) {
       diagnose(throwsLoc, diag::async_or_throws_in_wrong_position,
@@ -883,50 +881,34 @@ void Parser::parseAsyncThrows(SourceLoc existingArrowLoc, SourceLoc &asyncLoc,
 ///
 ParserResult<TypeRepr> Parser::parseThrowsType() {
   // look for the left paren for throws (_type_)
-  BacktrackingScope backtrack(*this);
   
-  ParserResult<TypeRepr> throwsTypeRepr;
+  Optional<BacktrackingScope> backtracking;
   
   if (Tok.is(tok::l_paren)) {
-    consumeToken();
-    throwsTypeRepr = parseTypeIdentifier();
-    if (!throwsTypeRepr.isParseError()) {
-      if (Tok.is(tok::r_paren)) {
-        consumeToken();
-        backtrack.cancelBacktrack();
-        return throwsTypeRepr;
+    SourceLoc lParenLoc = consumeToken();
+    
+    backtracking.emplace(*this);
+    
+    ParserResult<TypeRepr> throwsTypeRepr = parseType(diag::expected_parenthesized_type_after_throws);
+    
+    if (auto typeRepr = throwsTypeRepr.getPtrOrNull()) {
+      if (isa<FunctionTypeRepr>(typeRepr) && !Tok.is(tok::r_paren)) {
+        backtracking.reset();
+        
+        throwsTypeRepr = parseTypeNotAllowingFunctionType(diag::expected_parenthesized_type_after_throws);
       }
     }
+    
+    if (backtracking) backtracking->cancelBacktrack();
+    
+    // Parse the closing ')'.
+    SourceLoc rParenLoc;
+    parseMatchingToken(tok::r_paren, rParenLoc, diag::expected_rparen_thrown_type, lParenLoc);
+    
+    return throwsTypeRepr;
   }
+  
   return nullptr;
-  
-//
-//    ParserResult<TypeRepr> throwsTypeRepr = parseTypeIdentifier();
-//    if (!throwsTypeRepr.isParseError()) {
-//      SourceLoc rParen;
-//      if (!parseMatchingToken(tok::r_paren, rParen,
-//                              diag::expected_parenthesized_type_after_throws,
-//                              lParen)) {
-//        //returns false if found right paren
-//        // success
-//        throwsType = throwsTypeRepr.getPtrOrNull();
-//      } else {
-//        // both parens but empty throwsType [()]
-//        diagnose(Tok, diag::expected_parenthesized_type_after_throws);
-//      }
-//    } else {
-//      // no matching right paren
-//      diagnose(Tok, diag::expected_parenthesized_type_after_throws);
-//    }
-//  } else {
-//    // no parens at all, just continue
-//    // bad parse of type representation
-//    //diagnose(Tok, diag::expected_parenthesized_type_after_throws);
-//  }
-
-  
-//} // end of tok::kw_throws
-
 }
 
 /// Parse a pattern with an optional type annotation.

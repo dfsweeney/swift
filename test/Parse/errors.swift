@@ -2,16 +2,37 @@
 
 struct SomeError: Error {}
 
-func a() throws (SomeError) -> Int {
+func hasThrownType() throws (SomeError) -> Int {
   return 1
 }
 
-protocol P {
-  func b() throws (SomeError) -> Int
-  func d(x: Int) throws
-  mutating func c() throws (SomeError) -> Int
+protocol TestProtocol {
+  func missingClosingParenAndType() throws ( -> Int
+  // expected-error @-1 {{expected a parenthesized type after 'throws'}} {{45-45- <#type#>}}
+  // expected-error @-2 {{expected ')' at end of thrown type}}
+  // expected-note {{to match this opening '('}}
+
+  func noType(x: Int) throws
+
+  mutating func hasThrownType() throws (SomeError) -> Int
   var x : Int {get}
+
+  func missingClosingParen() throws (SomeError
+  // expected-error {{expected ')' at end of thrown type}}
+  // expected-note {{to match this opening '('}}
+  var z: Int { get set }
 }
+
+
+func missingTrownType() throws () {} // expected-error {{expected a parenthesized type after 'throws'}} {{33-33- <#type#>}}
+
+func missingClosingParenAmbiguous1() throws (Int -> () -> Int {}
+// expected-error {{expected ')' at end of thrown type}}
+// expected-note {{to match this opening '('}}
+func missingClosingParenAmbiguous2() throws ((Int) -> () -> Int {}
+// expected-error {{expected ')' at end of thrown type}}
+// expected-note {{to match this opening '('}}
+
 
 enum MSV : Error {
   case Foo, Bar, Baz

@@ -1175,6 +1175,11 @@ public:
   ParserResult<TypeRepr> parseType(Diag<> MessageID,
                                    bool HandleCodeCompletion = true,
                                    bool IsSILFuncDecl = false);
+  
+  ParserResult<TypeRepr>
+    parseTypeNotAllowingFunctionType(Diag<> MessageID,
+                                     bool HandleCodeCompletion = true,
+                                     bool IsSILFuncDecl = false);
 
   ParserResult<TypeRepr>
     parseTypeSimpleOrComposition(Diag<> MessageID,
