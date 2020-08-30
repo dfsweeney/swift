@@ -33,6 +33,23 @@ func missingClosingParenAmbiguous2() throws ((Int) -> () -> Int {}
 // expected-error {{expected ')' at end of thrown type}}
 // expected-note {{to match this opening '('}}
 
+var functionTypeWithThrownType: (Int) throws (SomeError) -> Int
+
+var typeWithThrownType: (Int) throws (SomeError)
+// expected-error @-1 {{consecutive statements on a line must be separated by ';'}}
+// expected-error @-2 {{expected expression}}
+
+var functionTypeMissingClosingParen: (Int) throws (SomeError -> Int
+// expected-error {{expected ')' at end of thrown type}}
+// expected-note {{to match this opening '('}}
+
+var functionTypeMissingThrownType: (Int) throws () -> Int // expected-error {{expected a parenthesized type after 'throws'}} {{50-50- <#type#>}}
+
+var functionTypeMissingClosingParenAndType: (Int) throws ( -> Int
+// expected-error @-1 {{expected a parenthesized type after 'throws'}} {{59-59- <#type#>}}
+// expected-error @-2 {{expected ')' at end of thrown type}}
+// expected-note {{to match this opening '('}}
+
 
 enum MSV : Error {
   case Foo, Bar, Baz

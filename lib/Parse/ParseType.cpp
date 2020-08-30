@@ -479,14 +479,15 @@ ParserResult<TypeRepr> Parser::parseType(Diag<> MessageID,
   }
 
   // Parse a throws specifier.
-  // Don't consume 'throws', if the next token is not '->' or 'async', so we
-  // can emit a more useful diagnostic when parsing a function decl.
+  // Don't consume 'throws', if the next token is not '->', 'async' or '(',
+  // so we can emit a more useful diagnostic when parsing a function decl.
   SourceLoc throwsLoc;
   TypeRepr *throwsType = nullptr;
   if (Tok.isAny(tok::kw_throws, tok::kw_rethrows, tok::kw_throw, tok::kw_try) &&
       (peekToken().is(tok::arrow) ||
        (shouldParseExperimentalConcurrency() &&
-        peekToken().isContextualKeyword("async")))) {
+        peekToken().isContextualKeyword("async")) ||
+         peekToken().is(tok::l_paren))) {
     if (Tok.isAny(tok::kw_rethrows, tok::kw_throw, tok::kw_try)) {
       // 'rethrows' is only allowed on function declarations for now.
       // 'throw' or 'try' are probably typos for 'throws'.
@@ -495,19 +496,15 @@ ParserResult<TypeRepr> Parser::parseType(Diag<> MessageID,
       diagnose(Tok.getLoc(), DiagID)
         .fixItReplace(Tok.getLoc(), "throws");
     }
+    
+    BacktrackingScope backtrack(*this);
+    
     throwsLoc = consumeToken();
-
-    ASTContext &Ctx = SF.getASTContext();
-    DiagnosticSuppression SuppressedDiags(Ctx.Diags);
-    bool hasType = false;
-    {
-      BacktrackingScope backtrack(*this);
-      hasType = canParseType();
-    }
-    if (hasType) {
-      ParserResult<TypeRepr> result = parseType();
-      throwsType = result.getPtrOrNull();
-    }
+    
+    ParserResult<TypeRepr> throwsTypeResult = parseThrowsType();
+    
+    throwsType = throwsTypeResult.getPtrOrNull();
+    // TODO need to set throws type location from result
 
     // 'async' must preceed 'throws'; accept this but complain.
     if (shouldParseExperimentalConcurrency() &&
@@ -518,6 +515,8 @@ ParserResult<TypeRepr> Parser::parseType(Diag<> MessageID,
         .fixItRemove(asyncLoc)
         .fixItInsert(throwsLoc, "async ");
     }
+    
+    if (Tok.is(tok::arrow)) backtrack.cancelBacktrack();
   }
 
   if (Tok.is(tok::arrow)) {
