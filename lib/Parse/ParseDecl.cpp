@@ -6365,8 +6365,8 @@ ParserResult<FuncDecl> Parser::parseDeclFunc(SourceLoc StaticLoc,
   TypeRepr *throwsType = nullptr;
   bool rethrows;
   Status |= parseFunctionSignature(SimpleName, FullName, BodyParams,
-                                   DefaultArgs, asyncLoc, throwsLoc, throwsType, rethrows,
-                                   FuncRetTy);
+                                   DefaultArgs, asyncLoc, throwsLoc, throwsType,
+                                   rethrows, FuncRetTy);
   if (Status.hasCodeCompletion() && !CodeCompletion) {
     // Trigger delayed parsing, no need to continue.
     return Status;
@@ -6378,8 +6378,8 @@ ParserResult<FuncDecl> Parser::parseDeclFunc(SourceLoc StaticLoc,
   auto *FD = FuncDecl::create(Context, StaticLoc, StaticSpelling,
                               FuncLoc, FullName, NameLoc,
                               /*Async=*/asyncLoc.isValid(), asyncLoc,
-                              /*Throws=*/throwsLoc.isValid(), throwsLoc, throwsType,
-                              GenericParams,
+                              /*Throws=*/throwsLoc.isValid(), throwsLoc,
+                              throwsType, GenericParams,
                               BodyParams, FuncRetTy,
                               CurDeclContext);
 

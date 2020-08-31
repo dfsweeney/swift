@@ -7186,7 +7186,8 @@ FuncDecl *FuncDecl::createImpl(ASTContext &Context,
                                SourceLoc FuncLoc,
                                DeclName Name, SourceLoc NameLoc,
                                bool Async, SourceLoc AsyncLoc,
-                               bool Throws, SourceLoc ThrowsLoc, TypeRepr *ThrowsType,
+                               bool Throws, SourceLoc ThrowsLoc,
+                               TypeRepr *ThrowsType,
                                GenericParamList *GenericParams,
                                DeclContext *Parent,
                                ClangNode ClangN) {
@@ -7210,14 +7211,16 @@ FuncDecl *FuncDecl::createImpl(ASTContext &Context,
 
 FuncDecl *FuncDecl::createDeserialized(ASTContext &Context,
                                        StaticSpellingKind StaticSpelling,
-                                       DeclName Name, bool Async, bool Throws, TypeRepr *ThrowsType,
+                                       DeclName Name, bool Async, bool Throws,
+                                       TypeRepr *ThrowsType,
                                        GenericParamList *GenericParams,
                                        Type FnRetType, DeclContext *Parent) {
   assert(FnRetType && "Deserialized result type must not be null");
   auto *const FD =
       FuncDecl::createImpl(Context, SourceLoc(), StaticSpelling, SourceLoc(),
                            Name, SourceLoc(), Async, SourceLoc(), Throws,
-                           SourceLoc(), ThrowsType, GenericParams, Parent, ClangNode());
+                           SourceLoc(), ThrowsType, GenericParams, Parent,
+                           ClangNode());
   FD->setResultInterfaceType(FnRetType);
   return FD;
 }
@@ -7225,7 +7228,8 @@ FuncDecl *FuncDecl::createDeserialized(ASTContext &Context,
 FuncDecl *FuncDecl::create(ASTContext &Context, SourceLoc StaticLoc,
                            StaticSpellingKind StaticSpelling, SourceLoc FuncLoc,
                            DeclName Name, SourceLoc NameLoc, bool Async,
-                           SourceLoc AsyncLoc, bool Throws, SourceLoc ThrowsLoc, TypeRepr *ThrowsType,
+                           SourceLoc AsyncLoc, bool Throws, SourceLoc ThrowsLoc,
+                           TypeRepr *ThrowsType,
                            GenericParamList *GenericParams,
                            ParameterList *BodyParams, TypeRepr *ResultTyR,
                            DeclContext *Parent) {
@@ -7240,7 +7244,8 @@ FuncDecl *FuncDecl::create(ASTContext &Context, SourceLoc StaticLoc,
 FuncDecl *FuncDecl::createImplicit(ASTContext &Context,
                                    StaticSpellingKind StaticSpelling,
                                    DeclName Name, SourceLoc NameLoc, bool Async,
-                                   bool Throws, TypeRepr *ThrowsType, GenericParamList *GenericParams,
+                                   bool Throws, TypeRepr *ThrowsType,
+                                   GenericParamList *GenericParams,
                                    ParameterList *BodyParams, Type FnRetType,
                                    DeclContext *Parent) {
   assert(FnRetType);

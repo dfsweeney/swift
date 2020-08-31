@@ -5862,7 +5862,8 @@ protected:
                        GenericParamList *GenericParams)
       : GenericContext(DeclContextKind::AbstractFunctionDecl, Parent, GenericParams),
         ValueDecl(Kind, Parent, Name, NameLoc),
-        Body(nullptr), AsyncLoc(AsyncLoc), ThrowsLoc(ThrowsLoc) {
+        Body(nullptr), AsyncLoc(AsyncLoc), ThrowsLoc(ThrowsLoc),
+        ThrowsType(ThrowsType) {
     setBodyKind(BodyKind::None);
     Bits.AbstractFunctionDecl.HasImplicitSelfDecl = HasImplicitSelfDecl;
     Bits.AbstractFunctionDecl.Overridden = false;
@@ -6179,6 +6180,14 @@ public:
   /// constructor.
   bool hasDynamicSelfResult() const;
 
+  bool hasThrowsType() const {
+    return ThrowsType != nullptr;
+  }
+
+  TypeRepr *getThrowsType() {
+    return ThrowsType;
+  }
+
   using DeclContext::operator new;
   using Decl::getASTContext;
 };
@@ -6242,7 +6251,8 @@ private:
                               SourceLoc FuncLoc,
                               DeclName Name, SourceLoc NameLoc,
                               bool Async, SourceLoc AsyncLoc,
-                              bool Throws, SourceLoc ThrowsLoc, TypeRepr *ThrowsType,
+                              bool Throws, SourceLoc ThrowsLoc,
+                              TypeRepr *ThrowsType,
                               GenericParamList *GenericParams,
                               DeclContext *Parent,
                               ClangNode ClangN);
@@ -6265,14 +6275,16 @@ public:
   /// Factory function only for use by deserialization.
   static FuncDecl *createDeserialized(ASTContext &Context,
                                       StaticSpellingKind StaticSpelling,
-                                      DeclName Name, bool Async, bool Throws, TypeRepr *ThrowsType,
+                                      DeclName Name, bool Async, bool Throws,
+                                      TypeRepr *ThrowsType,
                                       GenericParamList *GenericParams,
                                       Type FnRetType, DeclContext *Parent);
 
   static FuncDecl *create(ASTContext &Context, SourceLoc StaticLoc,
                           StaticSpellingKind StaticSpelling, SourceLoc FuncLoc,
                           DeclName Name, SourceLoc NameLoc, bool Async,
-                          SourceLoc AsyncLoc, bool Throws, SourceLoc ThrowsLoc, TypeRepr *ThrowsType,
+                          SourceLoc AsyncLoc, bool Throws, SourceLoc ThrowsLoc,
+                          TypeRepr *ThrowsType,
                           GenericParamList *GenericParams,
                           ParameterList *BodyParams, TypeRepr *ResultTyR,
                           DeclContext *Parent);
@@ -6280,12 +6292,14 @@ public:
   static FuncDecl *createImplicit(ASTContext &Context,
                                   StaticSpellingKind StaticSpelling,
                                   DeclName Name, SourceLoc NameLoc, bool Async,
-                                  bool Throws, TypeRepr *ThrowsType, GenericParamList *GenericParams,
+                                  bool Throws, TypeRepr *ThrowsType,
+                                  GenericParamList *GenericParams,
                                   ParameterList *BodyParams, Type FnRetType,
                                   DeclContext *Parent);
 
   static FuncDecl *createImported(ASTContext &Context, SourceLoc FuncLoc,
-                                  DeclName Name, SourceLoc NameLoc, bool Throws, TypeRepr *ThrowsType,
+                                  DeclName Name, SourceLoc NameLoc, bool Throws,
+                                  TypeRepr *ThrowsType,
                                   ParameterList *BodyParams, Type FnRetType,
                                   DeclContext *Parent, ClangNode ClangN);
 

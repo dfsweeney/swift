@@ -849,14 +849,13 @@ void Parser::parseAsyncThrows(SourceLoc existingArrowLoc, SourceLoc &asyncLoc,
         .fixItReplace(Tok.getLoc(), "throws");
     }
     StringRef keyword;
-    
+
     keyword = Tok.getText();
     throwsLoc = consumeToken();
-    
+
     ParserResult<TypeRepr> throwsTypeResult = parseThrowsType();
-    
     throwsType = throwsTypeResult.getPtrOrNull();
-    
+
     if (existingArrowLoc.isValid()) {
       diagnose(throwsLoc, diag::async_or_throws_in_wrong_position,
                rethrows ? (*rethrows ? 1 : 0) : 0)
@@ -884,38 +883,40 @@ void Parser::parseAsyncThrows(SourceLoc existingArrowLoc, SourceLoc &asyncLoc,
 /// the return type of the throwing function
 ParserResult<TypeRepr> Parser::parseThrowsType() {
   // look for the left paren for throws (_type_)
-  
+
   // backtracking, in case the closing parenthesis is missing
   Optional<BacktrackingScope> backtracking;
-  
+
   if (Tok.is(tok::l_paren)) {
     SourceLoc lParenLoc = consumeToken();
-    
+
     backtracking.emplace(*this);
-    
+
     // we parse every type (including function types)
-    ParserResult<TypeRepr> throwsTypeRepr = parseType(diag::expected_parenthesized_type_after_throws);
-    
+    ParserResult<TypeRepr> throwsTypeRepr =
+      parseType(diag::expected_parenthesized_type_after_throws);
+
     // if the closing parenthesis is missing, we backtrack and parse the type
     // again, this time excluding function types
     if (auto typeRepr = throwsTypeRepr.getPtrOrNull()) {
       if (isa<FunctionTypeRepr>(typeRepr) && !Tok.is(tok::r_paren)) {
         backtracking.reset();
-        
-        throwsTypeRepr = parseTypeNotAllowingFunctionType(diag::expected_parenthesized_type_after_throws);
+
+        throwsTypeRepr =
+          parseTypeNotAllowingFunctionType(diag::expected_parenthesized_type_after_throws);
       }
     }
-    
+
     // otherwise we cancel the backtrack
     if (backtracking) backtracking->cancelBacktrack();
-    
+
     // Parse the closing ')'.
     SourceLoc rParenLoc;
     parseMatchingToken(tok::r_paren, rParenLoc, diag::expected_rparen_thrown_type, lParenLoc);
-    
+
     return throwsTypeRepr;
   }
-  
+
   return nullptr;
 }
 
