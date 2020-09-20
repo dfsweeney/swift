@@ -226,7 +226,8 @@ EXPR_NODES = [
     Node('FloatLiteralExpr', kind='Expr',
          children=[
              Child('FloatingDigits', kind='FloatingLiteralToken'),
-         ]),
+         ],
+         must_uphold_invariant=True),
 
     Node('TupleExpr', kind='Expr',
          traits=['Parenthesized'],
@@ -300,7 +301,8 @@ EXPR_NODES = [
     Node('IntegerLiteralExpr', kind='Expr',
          children=[
              Child('Digits', kind='IntegerLiteralToken'),
-         ]),
+         ],
+         must_uphold_invariant=True),
 
     # true or false
     Node('BooleanLiteralExpr', kind='Expr',

@@ -39,6 +39,7 @@
 #include "swift/Basic/Statistic.h"
 #include "swift/Parse/Confusables.h"
 #include "swift/Parse/Lexer.h"
+#include "swift/Sema/CodeCompletionTypeChecking.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
@@ -542,6 +543,9 @@ Expr *TypeChecker::resolveDeclRefExpr(UnresolvedDeclRefExpr *UDRE,
   //       chance to diagnose name shadowing which requires explicit
   //       name/module qualifier to access top-level name.
   lookupOptions |= NameLookupFlags::IncludeOuterResults;
+
+  if (Loc.isInvalid())
+    DC = DC->getModuleScopeContext();
 
   auto Lookup = TypeChecker::lookupUnqualified(DC, Name, Loc, lookupOptions);
 
@@ -2162,6 +2166,14 @@ TypeChecker::typeCheckExpression(
                                   "typecheck-expr", expr);
   PrettyStackTraceExpr stackTrace(Context, "type-checking", expr);
 
+  // First let's check whether given expression has a code completion
+  // token which requires special handling.
+  if (Context.CompletionCallback &&
+      typeCheckForCodeCompletion(target, [&](const constraints::Solution &S) {
+        Context.CompletionCallback->sawSolution(S);
+      }))
+    return None;
+
   // First, pre-check the expression, validating any types that occur in the
   // expression and folding sequence expressions.
   if (ConstraintSystem::preCheckExpression(
@@ -2446,7 +2458,6 @@ bool TypeChecker::typeCheckExprPattern(ExprPattern *EP, DeclContext *DC,
   // Create a 'let' binding to stand in for the RHS value.
   auto *matchVar = new (Context) VarDecl(/*IsStatic*/false,
                                          VarDecl::Introducer::Let,
-                                         /*IsCaptureList*/false,
                                          EP->getLoc(),
                                          Context.getIdentifier("$match"),
                                          DC);
@@ -2454,14 +2465,14 @@ bool TypeChecker::typeCheckExprPattern(ExprPattern *EP, DeclContext *DC,
 
   matchVar->setImplicit();
   EP->setMatchVar(matchVar);
-  matchVar->setHasNonPatternBindingInit();
 
   // Find '~=' operators for the match.
   auto lookupOptions = defaultUnqualifiedLookupOptions;
   lookupOptions |= NameLookupFlags::KnownPrivate;
   auto matchLookup =
-      lookupUnqualified(DC, DeclNameRef(Context.Id_MatchOperator), SourceLoc(),
-                        lookupOptions);
+      lookupUnqualified(DC->getModuleScopeContext(),
+                        DeclNameRef(Context.Id_MatchOperator),
+                        SourceLoc(), lookupOptions);
   auto &diags = DC->getASTContext().Diags;
   if (!matchLookup) {
     diags.diagnose(EP->getLoc(), diag::no_match_operator);

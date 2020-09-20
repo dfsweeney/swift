@@ -129,6 +129,19 @@ static bool addOutputsOfType(ArgStringList &Arguments,
   return Added;
 }
 
+static void addLTOArgs(const OutputInfo &OI, ArgStringList &arguments) {
+  switch (OI.LTOVariant) {
+  case OutputInfo::LTOKind::None:
+    break;
+  case OutputInfo::LTOKind::LLVMThin:
+    arguments.push_back("-lto=llvm-thin");
+    break;
+  case OutputInfo::LTOKind::LLVMFull:
+    arguments.push_back("-lto=llvm-full");
+    break;
+  }
+}
+
 void ToolChain::addCommonFrontendArgs(const OutputInfo &OI,
                                       const CommandOutput &output,
                                       const ArgList &inputArgs,
@@ -259,8 +272,6 @@ void ToolChain::addCommonFrontendArgs(const OutputInfo &OI,
   inputArgs.AddLastArg(arguments, options::OPT_debug_diagnostic_names);
   inputArgs.AddLastArg(arguments, options::OPT_print_educational_notes);
   inputArgs.AddLastArg(arguments, options::OPT_diagnostic_style);
-  inputArgs.AddLastArg(arguments, options::OPT_enable_astscope_lookup);
-  inputArgs.AddLastArg(arguments, options::OPT_disable_astscope_lookup);
   inputArgs.AddLastArg(arguments, options::OPT_disable_parser_lookup);
   inputArgs.AddLastArg(arguments,
                        options::OPT_enable_experimental_concise_pound_file);
@@ -298,6 +309,8 @@ void ToolChain::addCommonFrontendArgs(const OutputInfo &OI,
     arguments.push_back("-Xcc");
     arguments.push_back(inputArgs.MakeArgString(workingDirectory));
   }
+
+  addLTOArgs(OI, arguments);
 
   // -g implies -enable-anonymous-context-mangled-names, because the extra
   // metadata aids debugging.
@@ -620,6 +633,7 @@ const char *ToolChain::JobContext::computeFrontendModeForCompile() const {
   case file_types::TY_BitstreamOptRecord:
   case file_types::TY_SwiftModuleInterfaceFile:
   case file_types::TY_PrivateSwiftModuleInterfaceFile:
+  case file_types::TY_SwiftModuleSummaryFile:
   case file_types::TY_SwiftSourceInfoFile:
   case file_types::TY_SwiftCrossImportDir:
   case file_types::TY_SwiftOverlayFile:
@@ -765,6 +779,9 @@ void ToolChain::JobContext::addFrontendSupplementaryOutputArguments(
                    "-emit-loaded-module-trace-path");
   addOutputsOfType(arguments, Output, Args, file_types::TY_TBD,
                    "-emit-tbd-path");
+  addOutputsOfType(arguments, Output, Args,
+                   file_types::TY_SwiftModuleSummaryFile,
+                   "-emit-module-summary-path");
 }
 
 ToolChain::InvocationInfo
@@ -877,6 +894,7 @@ ToolChain::constructInvocation(const BackendJobAction &job,
     case file_types::TY_BitstreamOptRecord:
     case file_types::TY_SwiftModuleInterfaceFile:
     case file_types::TY_PrivateSwiftModuleInterfaceFile:
+    case file_types::TY_SwiftModuleSummaryFile:
     case file_types::TY_SwiftSourceInfoFile:
     case file_types::TY_SwiftCrossImportDir:
     case file_types::TY_SwiftOverlayFile:

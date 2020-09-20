@@ -153,6 +153,7 @@ public:
   bool shouldTreatAsLLVM() const;
   bool shouldTreatAsSIL() const;
   bool shouldTreatAsModuleInterface() const;
+  bool shouldTreatAsObjCHeader() const;
 
   bool areAllNonPrimariesSIB() const;
 
@@ -240,6 +241,7 @@ public:
   bool hasModuleSourceInfoOutputPath() const;
   bool hasModuleInterfaceOutputPath() const;
   bool hasPrivateModuleInterfaceOutputPath() const;
+  bool hasModuleSummaryOutputPath() const;
   bool hasTBDPath() const;
 
   bool hasDependencyTrackerPath() const;

@@ -137,9 +137,13 @@ static void updateRuntimeLibraryPaths(SearchPathOptions &SearchPathOpts,
   if (SearchPathOpts.SkipRuntimeLibraryImportPaths)
     return;
 
-  if (!Triple.isOSDarwin())
-    llvm::sys::path::append(LibPath, swift::getMajorArchitectureName(Triple));
   SearchPathOpts.RuntimeLibraryImportPaths.push_back(std::string(LibPath.str()));
+
+  // This is compatibility for <=5.3
+  if (!Triple.isOSDarwin()) {
+    llvm::sys::path::append(LibPath, swift::getMajorArchitectureName(Triple));
+    SearchPathOpts.RuntimeLibraryImportPaths.push_back(std::string(LibPath.str()));
+  }
 
   if (!SearchPathOpts.SDKPath.empty()) {
     if (tripleIsMacCatalystEnvironment(Triple)) {
@@ -224,24 +228,6 @@ void CompilerInvocation::setTargetTriple(const llvm::Triple &Triple) {
 void CompilerInvocation::setSDKPath(const std::string &Path) {
   SearchPathOpts.SDKPath = Path;
   updateRuntimeLibraryPaths(SearchPathOpts, LangOpts.Target);
-}
-
-SourceFileKind CompilerInvocation::getSourceFileKind() const {
-  switch (getInputKind()) {
-  case InputFileKind::Swift:
-    return SourceFileKind::Main;
-  case InputFileKind::SwiftLibrary:
-    return SourceFileKind::Library;
-  case InputFileKind::SwiftModuleInterface:
-    return SourceFileKind::Interface;
-  case InputFileKind::SIL:
-    return SourceFileKind::SIL;
-  case InputFileKind::None:
-  case InputFileKind::LLVM:
-    llvm_unreachable("Trying to convert from unsupported InputFileKind");
-  }
-
-  llvm_unreachable("Unhandled InputFileKind in switch.");
 }
 
 static bool ParseFrontendArgs(
@@ -405,9 +391,6 @@ static bool ParseLangArgs(LangOptions &Opts, ArgList &Args,
   Opts.DisableAvailabilityChecking |=
       Args.hasArg(OPT_disable_availability_checking);
 
-  if (FrontendOpts.InputKind == InputFileKind::SIL)
-    Opts.DisableAvailabilityChecking = true;
-  
   if (auto A = Args.getLastArg(OPT_enable_access_control,
                                OPT_disable_access_control)) {
     Opts.EnableAccessControl
@@ -443,15 +426,7 @@ static bool ParseLangArgs(LangOptions &Opts, ArgList &Args,
   }
   
   Opts.DisableParserLookup |= Args.hasArg(OPT_disable_parser_lookup);
-  Opts.EnableASTScopeLookup =
-      Args.hasFlag(options::OPT_enable_astscope_lookup,
-                   options::OPT_disable_astscope_lookup, Opts.EnableASTScopeLookup) ||
-      Opts.DisableParserLookup;
-  Opts.CrosscheckUnqualifiedLookup |=
-      Args.hasArg(OPT_crosscheck_unqualified_lookup);
   Opts.StressASTScopeLookup |= Args.hasArg(OPT_stress_astscope_lookup);
-  Opts.WarnIfASTScopeLookup |= Args.hasArg(OPT_warn_if_astscope_lookup);
-  Opts.LazyASTScopes |= Args.hasArg(OPT_lazy_astscopes);
   Opts.EnableNewOperatorLookup = Args.hasFlag(OPT_enable_new_operator_lookup,
                                               OPT_disable_new_operator_lookup,
                                               /*default*/ false);
@@ -701,8 +676,10 @@ static bool ParseLangArgs(LangOptions &Opts, ArgList &Args,
   }
 
   // If we're parsing SIL, access control doesn't make sense to enforce.
-  if (FrontendOpts.InputKind == InputFileKind::SIL) {
+  if (Args.hasArg(OPT_parse_sil) ||
+      FrontendOpts.InputsAndOutputs.shouldTreatAsSIL()) {
     Opts.EnableAccessControl = false;
+    Opts.DisableAvailabilityChecking = true;
   }
 
   return HadError || UnsupportedOS || UnsupportedArch;
@@ -1171,6 +1148,8 @@ static bool ParseSILArgs(SILOptions &Opts, ArgList &Args,
   Opts.EmitVerboseSIL |= Args.hasArg(OPT_emit_verbose_sil);
   Opts.EmitSortedSIL |= Args.hasArg(OPT_emit_sorted_sil);
   Opts.PrintInstCounts |= Args.hasArg(OPT_print_inst_counts);
+  Opts.StopOptimizationBeforeLoweringOwnership |=
+      Args.hasArg(OPT_sil_stop_optzns_before_lowering_ownership);
   if (const Arg *A = Args.getLastArg(OPT_external_pass_pipeline_filename))
     Opts.ExternalPassPipelineFilename = A->getValue();
 
@@ -1885,7 +1864,7 @@ CompilerInvocation::setUpInputForSILTool(
   // If it looks like we have an AST, set the source file kind to SIL and the
   // name of the module to the file's name.
   getFrontendOptions().InputsAndOutputs.addInput(
-      InputFile(inputFilename, bePrimary, fileBufOrErr.get().get()));
+      InputFile(inputFilename, bePrimary, fileBufOrErr.get().get(), file_types::TY_SIL));
 
   auto result = serialization::validateSerializedAST(
       fileBufOrErr.get()->getBuffer(), &extendedInfo);
@@ -1896,13 +1875,14 @@ CompilerInvocation::setUpInputForSILTool(
                                ? moduleNameArg
                                : llvm::sys::path::stem(inputFilename);
     setModuleName(stem);
-    setInputKind(InputFileKind::SwiftLibrary);
+    getFrontendOptions().InputMode =
+        FrontendOptions::ParseInputMode::SwiftLibrary;
   } else {
     const StringRef name = (alwaysSetModuleToMain || moduleNameArg.empty())
                                ? "main"
                                : moduleNameArg;
     setModuleName(name);
-    setInputKind(InputFileKind::SIL);
+    getFrontendOptions().InputMode = FrontendOptions::ParseInputMode::SIL;
   }
   return fileBufOrErr;
 }

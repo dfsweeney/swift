@@ -1009,23 +1009,9 @@ namespace {
     virtual Type visitCodeCompletionExpr(CodeCompletionExpr *E) {
       CS.Options |= ConstraintSystemFlags::SuppressDiagnostics;
       auto locator = CS.getConstraintLocator(E);
-      auto ty = CS.createTypeVariable(locator,
-                                      TVO_CanBindToLValue |
-                                      TVO_CanBindToNoEscape);
-
-      // Defaults to the type of the base expression if we have a base
-      // expression.
-      // FIXME: This is just to keep the old behavior where `foo(base.<HERE>)`
-      // the argument is type checked to the type of the 'base'. Ideally, code
-      // completion expression should be defauled to 'UnresolvedType'
-      // regardless of the existence of the base expression. But the constraint
-      // system is simply not ready for that.
-      if (auto base = E->getBase()) {
-        CS.addConstraint(ConstraintKind::Defaultable, ty, CS.getType(base),
-                         locator);
-      }
-      
-      return ty;
+      return CS.createTypeVariable(locator, TVO_CanBindToLValue |
+                                                TVO_CanBindToNoEscape |
+                                                TVO_CanBindToHole);
     }
 
     Type visitNilLiteralExpr(NilLiteralExpr *expr) {
@@ -1768,11 +1754,11 @@ namespace {
 
         auto type = contextualType->lookThroughAllOptionalTypes();
         if (conformsToKnownProtocol(
-                CS, type, KnownProtocolKind::ExpressibleByArrayLiteral))
+                CS.DC, type, KnownProtocolKind::ExpressibleByArrayLiteral))
           return false;
 
         return conformsToKnownProtocol(
-            CS, type, KnownProtocolKind::ExpressibleByDictionaryLiteral);
+            CS.DC, type, KnownProtocolKind::ExpressibleByDictionaryLiteral);
       };
 
       if (isDictionaryContextualType(contextualType)) {
@@ -2046,7 +2032,7 @@ namespace {
         }
       }
 
-      auto extInfo = closureEffects(closure);
+      auto extInfo = CS.closureEffects(closure);
 
       // Closure expressions always have function type. In cases where a
       // parameter or return type is omitted, a fresh type variable is used to
@@ -2185,7 +2171,7 @@ namespace {
         // FIXME: This should be handled in the solver, not here.
         //
         // Otherwise, create a new type variable.
-        if (!var->hasNonPatternBindingInit() &&
+        if (var->getParentPatternBinding() &&
             !var->hasAttachedPropertyWrapper() &&
             optionality != ReferenceOwnershipOptionality::Required) {
           if (auto boundExpr = locator.trySimplifyToExpr()) {

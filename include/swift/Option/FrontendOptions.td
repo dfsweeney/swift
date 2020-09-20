@@ -160,12 +160,6 @@ def crosscheck_unqualified_lookup : Flag<["-"], "crosscheck-unqualified-lookup">
 def stress_astscope_lookup : Flag<["-"], "stress-astscope-lookup">,
   HelpText<"Stress ASTScope-based unqualified name lookup (for testing)">;
   
-def warn_if_astscope_lookup : Flag<["-"], "warn-if-astscope-lookup">,
-  HelpText<"Print a warning if ASTScope lookup is used">;
-  
-def lazy_astscopes : Flag<["-"], "lazy-astscopes">,
-  HelpText<"Build ASTScopes lazily">;
-
 def use_clang_function_types : Flag<["-"], "use-clang-function-types">,
   HelpText<"Use stored Clang function types for computing canonical types.">;
 
@@ -585,6 +579,11 @@ def verify_all_substitution_maps : Flag<["-"], "verify-all-substitution-maps">,
 def sil_debug_serialization : Flag<["-"], "sil-debug-serialization">,
   HelpText<"Do not eliminate functions in Mandatory Inlining/SILCombine dead "
            "functions. (for debugging only)">;
+
+def sil_stop_optzns_before_lowering_ownership :
+  Flag<["-"], "sil-stop-optzns-before-lowering-ownership">,
+  HelpText<"Stop optimizing at SIL time before we lower ownership from SIL. "
+           "Intended only for SIL ossa tests">;
 
 def print_inst_counts : Flag<["-"], "print-inst-counts">,
   HelpText<"Before IRGen, count all the various SIL instructions. Must be used "

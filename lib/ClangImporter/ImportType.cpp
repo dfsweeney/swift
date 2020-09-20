@@ -1998,7 +1998,7 @@ static Type mapGenericArgs(const DeclContext *fromDC,
 /// Decompose the type of a completion handler parameter in a function
 /// imported as 'async' and produce the result type of the 'async' function.
 static Type decomposeCompletionHandlerType(
-   Type paramTy, ForeignAsyncConvention info) {
+   Type paramTy, ForeignAsyncConvention::Info info) {
   auto fnType = paramTy->lookThroughAllOptionalTypes()->getAs<FunctionType>();
   if (!fnType)
     return Type();
@@ -2036,6 +2036,7 @@ ImportedType ClangImporter::Implementation::importMethodParamsAndReturnType(
     ArrayRef<const clang::ParmVarDecl *> params, bool isVariadic,
     bool isFromSystemModule, ParameterList **bodyParams,
     ImportedName importedName,
+    Optional<ForeignAsyncConvention> &asyncConvention,
     Optional<ForeignErrorConvention> &foreignErrorInfo,
     SpecialMethodKind kind) {
 
@@ -2130,6 +2131,7 @@ ImportedType ClangImporter::Implementation::importMethodParamsAndReturnType(
   swiftResultTy = mapGenericArgs(origDC, dc, swiftResultTy);
 
   CanType errorParamType;
+  CanType completionHandlerType;
 
   SmallBitVector nonNullArgs = getNonNullArgs(clangDecl, params);
 
@@ -2167,7 +2169,7 @@ ImportedType ClangImporter::Implementation::importMethodParamsAndReturnType(
     }
 
     bool paramIsCompletionHandler =
-        asyncInfo && paramIndex == asyncInfo->completionHandlerParamIndex();
+        asyncInfo && paramIndex == asyncInfo->CompletionHandlerParamIndex;
 
     // Import the parameter type into Swift.
 
@@ -2244,9 +2246,7 @@ ImportedType ClangImporter::Implementation::importMethodParamsAndReturnType(
       if (Type replacedSwiftResultTy =
               decomposeCompletionHandlerType(swiftParamTy, *asyncInfo)) {
         swiftResultTy = replacedSwiftResultTy;
-
-        // FIXME: We will need an equivalent to "error parameter is replaced"
-        // for asynchronous functions. Perhaps add "async: ()"?
+        completionHandlerType = swiftParamTy->getCanonicalType();
         continue;
       }
 
@@ -2339,6 +2339,12 @@ ImportedType ClangImporter::Implementation::importMethodParamsAndReturnType(
   if (clangDecl->hasAttr<clang::NoReturnAttr>()) {
     origSwiftResultTy = SwiftContext.getNeverType();
     swiftResultTy = SwiftContext.getNeverType();
+  }
+
+  if (asyncInfo) {
+    asyncConvention = ForeignAsyncConvention(
+        completionHandlerType, asyncInfo->CompletionHandlerParamIndex,
+        asyncInfo->CompletionHandlerErrorParamIndex);
   }
 
   if (errorInfo) {
@@ -2436,7 +2442,7 @@ static ModuleDecl *tryLoadModule(ASTContext &C,
   if (importForwardDeclarations)
     module = C.getLoadedModule(moduleName);
   else
-    module = C.getModule({ {moduleName, SourceLoc()} });
+    module = C.getModuleByIdentifier(moduleName);
 
   checkedModules[moduleName] = module;
   return module;

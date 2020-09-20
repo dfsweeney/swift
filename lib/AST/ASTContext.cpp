@@ -299,7 +299,8 @@ struct ASTContext::Implementation {
   /// Map from normal protocol conformances to missing witnesses that have
   /// been delayed until the conformance is fully checked, so that we can
   /// issue a fixit that fills the entire protocol stub.
-  llvm::DenseMap<NormalProtocolConformance *, std::vector<ValueDecl*>>
+  llvm::DenseMap<
+      NormalProtocolConformance *, std::unique_ptr<MissingWitnessesBase>>
     DelayedMissingWitnesses;
 
   /// Stores information about lazy deserialization of various declarations.
@@ -653,6 +654,18 @@ llvm::BumpPtrAllocator &ASTContext::getAllocator(AllocationArena arena) const {
     return getImpl().CurrentConstraintSolverArena->Allocator;
   }
   llvm_unreachable("bad AllocationArena");
+}
+
+ImportPath::Raw
+swift::detail::ImportPathBuilder_copyToImpl(ASTContext &ctx,
+                                            ImportPath::Raw raw) {
+  return ctx.AllocateCopy(raw);
+}
+
+Identifier
+swift::detail::ImportPathBuilder_getIdentifierImpl(ASTContext &ctx,
+                                                   StringRef string) {
+  return ctx.getIdentifier(string);
 }
 
 /// Set a new stats reporter.
@@ -1633,7 +1646,7 @@ ModuleLoader *ASTContext::getModuleInterfaceLoader() const {
 }
 
 ModuleDecl *ASTContext::getLoadedModule(
-    ArrayRef<Located<Identifier>> ModulePath) const {
+    ImportPath::Module ModulePath) const {
   assert(!ModulePath.empty());
 
   // TODO: Swift submodules.
@@ -1898,28 +1911,28 @@ bool ASTContext::shouldPerformTypoCorrection() {
   return NumTypoCorrections <= LangOpts.TypoCorrectionLimit;
 }
 
-bool ASTContext::canImportModule(Located<Identifier> ModulePath) {
+bool ASTContext::canImportModule(ImportPath::Element ModuleName) {
   // If this module has already been successfully imported, it is importable.
-  if (getLoadedModule(ModulePath) != nullptr)
+  if (getLoadedModule(ImportPath::Module::Builder(ModuleName).get()) != nullptr)
     return true;
 
   // If we've failed loading this module before, don't look for it again.
-  if (FailedModuleImportNames.count(ModulePath.Item))
+  if (FailedModuleImportNames.count(ModuleName.Item))
     return false;
 
   // Otherwise, ask the module loaders.
   for (auto &importer : getImpl().ModuleLoaders) {
-    if (importer->canImportModule(ModulePath)) {
+    if (importer->canImportModule(ModuleName)) {
       return true;
     }
   }
 
-  FailedModuleImportNames.insert(ModulePath.Item);
+  FailedModuleImportNames.insert(ModuleName.Item);
   return false;
 }
 
 ModuleDecl *
-ASTContext::getModule(ArrayRef<Located<Identifier>> ModulePath) {
+ASTContext::getModule(ImportPath::Module ModulePath) {
   assert(!ModulePath.empty());
 
   if (auto *M = getLoadedModule(ModulePath))
@@ -1936,14 +1949,13 @@ ASTContext::getModule(ArrayRef<Located<Identifier>> ModulePath) {
 }
 
 ModuleDecl *ASTContext::getModuleByName(StringRef ModuleName) {
-  SmallVector<Located<Identifier>, 4>
-  AccessPath;
-  while (!ModuleName.empty()) {
-    StringRef SubModuleName;
-    std::tie(SubModuleName, ModuleName) = ModuleName.split('.');
-    AccessPath.push_back({ getIdentifier(SubModuleName), SourceLoc() });
-  }
-  return getModule(AccessPath);
+  ImportPath::Module::Builder builder(*this, ModuleName, /*separator=*/'.');
+  return getModule(builder.get());
+}
+
+ModuleDecl *ASTContext::getModuleByIdentifier(Identifier ModuleID) {
+  ImportPath::Module::Builder builder(ModuleID);
+  return getModule(builder.get());
 }
 
 ModuleDecl *ASTContext::getStdlibModule(bool loadIfAbsent) {
@@ -1952,8 +1964,7 @@ ModuleDecl *ASTContext::getStdlibModule(bool loadIfAbsent) {
 
   if (loadIfAbsent) {
     auto mutableThis = const_cast<ASTContext*>(this);
-    TheStdlibModule =
-      mutableThis->getModule({ Located<Identifier>(StdlibModuleName, SourceLoc()) });
+    TheStdlibModule = mutableThis->getModuleByIdentifier(StdlibModuleName);
   } else {
     TheStdlibModule = getLoadedModule(StdlibModuleName);
   }
@@ -2160,22 +2171,24 @@ bool ASTContext::hasDelayedConformanceErrors() const {
   return false;
 }
 
+MissingWitnessesBase::~MissingWitnessesBase() { }
+
 void ASTContext::addDelayedConformanceDiag(
        NormalProtocolConformance *conformance,
        DelayedConformanceDiag fn) {
   getImpl().DelayedConformanceDiags[conformance].push_back(std::move(fn));
 }
 
-void ASTContext::
-addDelayedMissingWitnesses(NormalProtocolConformance *conformance,
-                           ArrayRef<ValueDecl*> witnesses) {
-  auto &bucket = getImpl().DelayedMissingWitnesses[conformance];
-  bucket.insert(bucket.end(), witnesses.begin(), witnesses.end());
+void ASTContext::addDelayedMissingWitnesses(
+    NormalProtocolConformance *conformance,
+    std::unique_ptr<MissingWitnessesBase> missingWitnesses) {
+  getImpl().DelayedMissingWitnesses[conformance] = std::move(missingWitnesses);
 }
 
-std::vector<ValueDecl*> ASTContext::
-takeDelayedMissingWitnesses(NormalProtocolConformance *conformance) {
-  std::vector<ValueDecl*> result;
+std::unique_ptr<MissingWitnessesBase>
+ASTContext::takeDelayedMissingWitnesses(
+    NormalProtocolConformance *conformance) {
+  std::unique_ptr<MissingWitnessesBase> result;
   auto known = getImpl().DelayedMissingWitnesses.find(conformance);
   if (known != getImpl().DelayedMissingWitnesses.end()) {
     result = std::move(known->second);
@@ -4591,11 +4604,17 @@ CanGenericSignature ASTContext::getSingleGenericParameterSignature() const {
 // constraints while existential values do.
 CanGenericSignature ASTContext::getOpenedArchetypeSignature(CanType existential,
                                                             ModuleDecl *mod) {
+  assert(existential.isExistentialType());
+
+  // The opened archetype signature for a protocol type is identical
+  // to the protocol's own canonical generic signature.
+  if (const auto protoTy = dyn_cast<ProtocolType>(existential)) {
+    return protoTy->getDecl()->getGenericSignature()->getCanonicalSignature();
+  }
+
   auto found = getImpl().ExistentialSignatures.find(existential);
   if (found != getImpl().ExistentialSignatures.end())
     return found->second;
-
-  assert(existential.isExistentialType());
 
   auto genericParam = GenericTypeParamType::get(0, 0, *this);
   Requirement requirement(RequirementKind::Conformance, genericParam,
